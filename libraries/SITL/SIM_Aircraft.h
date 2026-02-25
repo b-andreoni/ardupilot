@@ -190,11 +190,16 @@ public:
 
     float get_airspeed_pitot() const { return airspeed_pitot; }
 
+    // Flags for set_pose behavior
+    enum SetPoseFlags : uint8_t {
+        SET_POSE_RESET_HOME_AND_ORIGIN = (1U << 0),
+    };
+
     /*
       used by scripting to control simulated aircraft position
      */
     static bool set_pose(uint8_t instance, const Location &loc, const Quaternion &quat,
-                         const Vector3f &velocity_ef, const Vector3f &gyro_rads);
+                         const Vector3f &velocity_ef, const Vector3f &gyro_rads, uint8_t flags = 0);
 
 protected:
     SIM *sitl;

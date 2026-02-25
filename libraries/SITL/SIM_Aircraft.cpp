@@ -1394,7 +1394,7 @@ void Aircraft::update_eas_airspeed()
 /*
   set pose on the aircraft, called from scripting
  */
-bool Aircraft::set_pose(uint8_t instance, const Location &loc, const Quaternion &quat, const Vector3f &velocity_ef, const Vector3f &gyro_rads)
+bool Aircraft::set_pose(uint8_t instance, const Location &loc, const Quaternion &quat, const Vector3f &velocity_ef, const Vector3f &gyro_rads, uint8_t flags)
 {
     if (instance >= MAX_SIM_INSTANCES || instances[instance] == nullptr) {
         return false;
@@ -1403,11 +1403,19 @@ bool Aircraft::set_pose(uint8_t instance, const Location &loc, const Quaternion 
     WITH_SEMAPHORE(aircraft.pose_sem);
 
     quat.rotation_matrix(aircraft.dcm);
-    aircraft.home = loc;
-    aircraft.origin = loc;
     aircraft.velocity_ef = velocity_ef;
     aircraft.location = loc;
-    aircraft.position = Vector3d(0, 0, 0);
+
+    // Check if the script explicitly requested to reset home and origin
+    if ((flags & SET_POSE_RESET_HOME_AND_ORIGIN) != 0) {
+        aircraft.home = loc;
+        aircraft.origin = loc;
+        aircraft.position = Vector3d(0, 0, 0);
+    } else {
+        // Default behavior: keep existing home/origin and calculate relative position
+        aircraft.position = aircraft.home.get_distance_NED_double(loc);
+    }
+
     aircraft.smoothing.position = aircraft.position;
     aircraft.smoothing.rotation_b2e = aircraft.dcm;
     aircraft.smoothing.velocity_ef = velocity_ef;
@@ -1420,8 +1428,8 @@ bool Aircraft::set_pose(uint8_t instance, const Location &loc, const Quaternion 
 /*
   wrapper for scripting access
  */
-bool SITL::SIM::set_pose(uint8_t instance, const Location &loc, const Quaternion &quat, const Vector3f &velocity_ef, const Vector3f &gyro_rads)
+bool SITL::SIM::set_pose(uint8_t instance, const Location &loc, const Quaternion &quat, const Vector3f &velocity_ef, const Vector3f &gyro_rads, uint8_t flags)
 {
-    return Aircraft::set_pose(instance, loc, quat, velocity_ef, gyro_rads);
+    return Aircraft::set_pose(instance, loc, quat, velocity_ef, gyro_rads, flags);
 }
 
