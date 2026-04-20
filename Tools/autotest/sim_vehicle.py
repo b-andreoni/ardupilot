@@ -332,6 +332,67 @@ def wait_unlimited():
 
 vinfo = vehicleinfo.VehicleInfo()
 
+def run_gui():
+    """Launches a wxPython GUI to generate command line arguments for SITL."""
+    try:
+        import wx
+    except ImportError:
+        progress("=========================================================")
+        progress("Warning: wxPython not found. Starting in text mode.")
+        progress("To use the graphical interface, install: pip install wxPython")
+        progress("=========================================================")
+        return []
+
+    class SITLLauncher(wx.Frame):
+        def __init__(self):
+            super().__init__(parent=None, title='ArduPilot SITL Launcher', size=(350, 250))
+            self.panel = wx.Panel(self)
+            self.sizer = wx.BoxSizer(wx.VERTICAL)
+            
+            self.vehicle_label = wx.StaticText(self.panel, label="Select Vehicle:")
+            # Use the dynamically loaded vehicle options from vehicleinfo
+            vehicles = list(vinfo.options.keys())
+                
+            self.vehicle_combo = wx.ComboBox(self.panel, choices=vehicles, style=wx.CB_READONLY)
+            self.vehicle_combo.SetSelection(0)
+            
+            self.console_check = wx.CheckBox(self.panel, label="Enable MAVProxy Console (--console)")
+            self.map_check = wx.CheckBox(self.panel, label="Enable MAVProxy Map (--map)")
+            self.osd_check = wx.CheckBox(self.panel, label="Enable OSD (--osd)")
+            
+            self.launch_btn = wx.Button(self.panel, label="Launch SITL", size=(-1, 40))
+            self.launch_btn.Bind(wx.EVT_BUTTON, self.on_launch)
+            
+            self.sizer.Add(self.vehicle_label, 0, wx.ALL | wx.EXPAND, 10)
+            self.sizer.Add(self.vehicle_combo, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+            self.sizer.Add(self.console_check, 0, wx.LEFT | wx.BOTTOM, 10)
+            self.sizer.Add(self.map_check, 0, wx.LEFT | wx.BOTTOM, 10)
+            self.sizer.Add(self.osd_check, 0, wx.LEFT | wx.BOTTOM, 10)
+            self.sizer.AddStretchSpacer()
+            self.sizer.Add(self.launch_btn, 0, wx.ALL | wx.EXPAND, 10)
+            
+            self.panel.SetSizer(self.sizer)
+            self.generated_args = []
+
+        def on_launch(self, event):
+            # Retrieve selected options and format as command line arguments
+            vehicle = self.vehicle_combo.GetValue()
+            if vehicle:
+                self.generated_args.extend(['-v', vehicle])
+            if self.console_check.GetValue():
+                self.generated_args.append('--console')
+            if self.map_check.GetValue():
+                self.generated_args.append('--map')
+            if self.osd_check.GetValue():
+                self.generated_args.append('--osd')
+            self.Close()
+
+    app = wx.App()
+    frame = SITLLauncher()
+    frame.Show()
+    app.MainLoop()
+    
+    return frame.generated_args
 
 def do_build(opts, frame_options):
     """Build sitl using waf"""
@@ -1444,6 +1505,27 @@ group_completion.add_option("", "--list-frame",
                             default=None,
                             help="List the vehicle frames")
 parser.add_option_group(group_completion)
+
+# Intercept execution to launch the interactive GUI if requested
+cwd = os.getcwd()
+vehicle_dir_name = os.path.basename(cwd)
+in_vehicle_dir = vehicle_dir_name in vinfo.options or vehicle_dir_name.lower() in vehicle_map
+
+use_gui = False
+
+if '--gui' in sys.argv:
+    use_gui = True
+    sys.argv.remove('--gui')
+elif len(sys.argv) == 1 and not in_vehicle_dir:
+    # No args and outside a vehicle directory
+    use_gui = True
+
+if use_gui:
+    gui_args = run_gui()
+    if not gui_args:
+        progress("Launch cancelled by user.")
+        sys.exit(0)
+    sys.argv.extend(gui_args)
 
 cmd_opts, cmd_args = parser.parse_args()
 
